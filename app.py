@@ -588,18 +588,64 @@ if trigger_manual:
         # ── Map ───────────────────────────────────────────────────────────────
         st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
         st.markdown("### 🗺️ Bản Đồ Vị Trí Trạm Phát Sóng")
-        st.caption(f"Vòng tròn tím = vùng phủ sóng ước tính (bán kính ~{acc:.0f}m)" if acc else "Vòng tròn tím = vùng phủ sóng ước tính (~500m)")
+        acc_text_cap = f"~{acc:.0f}m" if acc else "~500m"
+        st.caption(f"Vòng tròn = vùng phủ sóng ước tính (bán kính {acc_text_cap}) | Nguồn: {source}")
 
-        popup_html = (
-            f"<b>Tower:</b> MCC:{mcc} MNC:{mnc:02d}<br>"
-            f"<b>LAC/TAC:</b> {lac} | <b>CID:</b> {cid}<br>"
-            f"<b>Radio:</b> {radio_label}<br>"
-            f"<b>Nhà mạng:</b> {operator.get('name','N/A')}<br>"
-            f"<b>Tọa độ:</b> {lat:.6f}, {lon:.6f}<br>"
-            f"<b>Bán kính:</b> ~{acc:.0f}m | <b>Nguồn:</b> {source}"
-        )
-        m = build_cell_map(lat, lon, acc, popup_html, f"{mcc}-{mnc:02d}-{lac}-{cid}")
-        st_folium(m, width="100%", height=500, returned_objects=[])
+        # Nút mở Google Maps
+        st.markdown(
+            f'<a href="{maps_url}" target="_blank" style="display:inline-flex;align-items:center;gap:10px;'
+            f'padding:12px 24px;background:linear-gradient(135deg,#1a73e8,#1557b0);color:#fff;'
+            f'font-weight:700;font-size:14px;border-radius:12px;text-decoration:none;'
+            f'box-shadow:0 4px 18px rgba(26,115,232,0.35);margin-bottom:16px;">'
+            f'🌍 Xem vị trí trên Google Maps'
+            f'<span style="font-size:11px;opacity:0.8;">({lat:.5f}, {lon:.5f})</span></a>',
+            unsafe_allow_html=True)
+
+        # Hai tab bản đồ
+        tab_gg, tab_folium = st.tabs(["🗺️ Google Maps (Nhúng)", "🔵 OpenStreetMap (Folium)"])
+
+        with tab_gg:
+            ts = int(time.time() * 1000)
+            # Embed Google Maps tại tọa độ trạm, zoom mức 15 (phường/xã)
+            embed_src = (
+                f"https://www.google.com/maps/embed?pb="
+                f"!1m18!1m12!1m3!1d6000"
+                f"!2d{lon:.6f}!3d{lat:.6f}"
+                f"!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1"
+                f"!3m3!1m2!1s0x0%3A0x0!2z"
+                f"!5e0!3m2!1svi!2svn!4v{ts}!5m2!1svi!2svn"
+            )
+            iframe_html = f"""
+            <div style="border-radius:14px;overflow:hidden;
+                        box-shadow:0 6px 28px rgba(0,0,0,0.4);
+                        border:1px solid rgba(139,92,246,0.3);">
+                <iframe
+                    src="{embed_src}"
+                    width="100%" height="500"
+                    style="border:0;display:block;"
+                    allowfullscreen loading="lazy"
+                    referrerpolicy="no-referrer-when-downgrade">
+                </iframe>
+            </div>
+            <p style="text-align:center;font-size:12px;color:#94a3b8;margin-top:8px;">
+                Bản đồ không hiển thị?
+                <a href="{maps_url}" target="_blank" style="color:#a78bfa;">
+                    Mở Google Maps trực tiếp
+                </a>
+            </p>"""
+            components.html(iframe_html, height=540, scrolling=False)
+
+        with tab_folium:
+            popup_html = (
+                f"<b>Tower:</b> MCC:{mcc} MNC:{mnc:02d}<br>"
+                f"<b>LAC/TAC:</b> {lac} | <b>CID:</b> {cid}<br>"
+                f"<b>Radio:</b> {radio_label}<br>"
+                f"<b>Nhà mạng:</b> {operator.get('name','N/A')}<br>"
+                f"<b>Tọa độ:</b> {lat:.6f}, {lon:.6f}<br>"
+                f"<b>Bán kính:</b> {acc_text_cap} | <b>Nguồn:</b> {source}"
+            )
+            m = build_cell_map(lat, lon, acc, popup_html, f"{mcc}-{mnc:02d}-{lac}-{cid}")
+            st_folium(m, width="100%", height=500, returned_objects=[])
 
     else:
         st.error(f"❌ {result.get('message', 'Không tìm thấy trạm phát sóng với thông số này.')}")
