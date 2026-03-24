@@ -166,39 +166,64 @@ RADIO_BADGES = {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# API Functions
+# API Functions  (thứ tự ưu tiên: mylnikov → Mozilla → OpenCelliD community)
 # ─────────────────────────────────────────────────────────────────────────────
-def lookup_opencellid(mcc: int, mnc: int, lac: int, cellid: int, radio: str = "LTE") -> dict:
-    """OpenCelliD API - 1000 req/day miễn phí sau đăng ký"""
-    # Dùng community API không cần key (giới hạn nhẹ hơn)
-    url = "https://opencellid.org/cell/get"
-    params = {
-        "mcc": mcc, "mnc": mnc, "lac": lac, "cellid": cellid,
-        "radio": radio.upper(), "format": "json",
-        # Token miễn phí public (community token)
-        "token": "pk.4c896f8e7d4b2a6e2d9b1c3f8a5d7e9b",
-    }
+
+# Mapping radio type → tên chuẩn API
+RADIO_API_MAP = {
+    "GSM":  {"mylnikov": "gsm",  "mozilla": "gsm",   "opencellid": "GSM"},
+    "UMTS": {"mylnikov": "umts", "mozilla": "wcdma",  "opencellid": "UMTS"},
+    "LTE":  {"mylnikov": "lte",  "mozilla": "lte",    "opencellid": "LTE"},
+    "NR":   {"mylnikov": "nr",   "mozilla": "nr",     "opencellid": "NR"},
+    "CDMA": {"mylnikov": "cdma", "mozilla": "cdma",   "opencellid": "CDMA"},
+    "HSPA": {"mylnikov": "umts", "mozilla": "wcdma",  "opencellid": "UMTS"},
+}
+
+
+def lookup_mylnikov(mcc: int, mnc: int, lac: int, cellid: int, radio: str = "LTE") -> dict:
+    """
+    mylnikov.org — Miễn phí, không cần key, dùng dữ liệu OpenCelliD.
+    Đây là nguồn chính xác nhất không cần đăng ký.
+    """
+    r_type = RADIO_API_MAP.get(radio, {}).get("mylnikov", "lte")
+    url = (
+        f"https://api.mylnikov.org/geolocation/cell"
+        f"?v=1.2&data=open&radio={r_type}&mcc={mcc}&mnc={mnc}&lac={lac}&cellid={cellid}"
+    )
     try:
-        r = requests.get(url, params=params, timeout=10)
+        r = requests.get(url, timeout=10)
         if r.status_code == 200:
             data = r.json()
-            if "lat" in data and "lon" in data:
-                return {"status": "success", "source": "OpenCelliD", **data}
+            # result 1 = found, result -1 = not found
+            if data.get("result") == 1 and data.get("data"):
+                d = data["data"]
+                lat = d.get("lat")
+                lon = d.get("lon")
+                acc = d.get("range")   # bán kính tính bằng mét
+                if lat is not None and lon is not None:
+                    return {
+                        "status": "success",
+                        "source": "OpenCelliD (via mylnikov.org)",
+                        "lat": lat,
+                        "lon": lon,
+                        "accuracy": acc,
+                    }
     except Exception:
         pass
     return {"status": "fail"}
 
 
 def lookup_mozilla(mcc: int, mnc: int, lac: int, cellid: int, radio: str = "LTE") -> dict:
-    """Mozilla Location Services - miễn phí, không cần key"""
+    """Mozilla Location Services — fallback thứ 2."""
+    r_type = RADIO_API_MAP.get(radio, {}).get("mozilla", "lte")
     url = "https://location.services.mozilla.com/v1/geolocate?key=test"
     payload = {
         "cellTowers": [{
-            "radioType": radio.lower() if radio.lower() in ["gsm", "cdma", "lte", "nr"] else "lte",
-            "mobileCountryCode": mcc,
-            "mobileNetworkCode": mnc,
-            "locationAreaCode": lac,
-            "cellId": cellid,
+            "radioType":          r_type,
+            "mobileCountryCode":  mcc,
+            "mobileNetworkCode":  mnc,
+            "locationAreaCode":   lac,
+            "cellId":             cellid,
         }]
     }
     try:
@@ -209,10 +234,10 @@ def lookup_mozilla(mcc: int, mnc: int, lac: int, cellid: int, radio: str = "LTE"
             acc = data.get("accuracy")
             if loc.get("lat") and loc.get("lng"):
                 return {
-                    "status": "success",
-                    "source": "Mozilla Location Services",
-                    "lat": loc["lat"],
-                    "lon": loc["lng"],
+                    "status":   "success",
+                    "source":   "Mozilla Location Services",
+                    "lat":      loc["lat"],
+                    "lon":      loc["lng"],
                     "accuracy": acc,
                 }
     except Exception:
@@ -220,19 +245,64 @@ def lookup_mozilla(mcc: int, mnc: int, lac: int, cellid: int, radio: str = "LTE"
     return {"status": "fail"}
 
 
+def lookup_opencellid_community(mcc: int, mnc: int, lac: int, cellid: int, radio: str = "LTE") -> dict:
+    """OpenCelliD community endpoint — fallback thứ 3 (cần token thực từ my.opencellid.org)."""
+    r_type = RADIO_API_MAP.get(radio, {}).get("opencellid", "LTE")
+    # Token cộng đồng — người dùng có thể thay bằng token thực từ my.opencellid.org
+    token = st.secrets.get("OPENCELLID_TOKEN", "") if hasattr(st, "secrets") else ""
+    if not token:
+        return {"status": "fail"}
+    url = "https://opencellid.org/cell/get"
+    params = {
+        "mcc": mcc, "mnc": mnc, "lac": lac, "cellid": cellid,
+        "radio": r_type, "format": "json", "token": token,
+    }
+    try:
+        r = requests.get(url, params=params, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            if "lat" in data and "lon" in data:
+                return {
+                    "status":   "success",
+                    "source":   "OpenCelliD",
+                    "lat":      data["lat"],
+                    "lon":      data["lon"],
+                    "accuracy": data.get("range"),
+                }
+    except Exception:
+        pass
+    return {"status": "fail"}
+
+
 def lookup_combined(mcc: int, mnc: int, lac: int, cellid: int, radio: str = "LTE") -> dict:
-    """Thử OpenCelliD trước, nếu fail thì dùng Mozilla"""
-    # Try Mozilla first (more reliable without API key)
+    """Thử tuần tự: mylnikov → Mozilla → OpenCelliD."""
+    tried = []
+
+    # 1. Mylnikov (OpenCelliD data, no key)
+    result = lookup_mylnikov(mcc, mnc, lac, cellid, radio)
+    if result["status"] == "success":
+        return result
+    tried.append("mylnikov.org")
+
+    # 2. Mozilla Location Services
     result = lookup_mozilla(mcc, mnc, lac, cellid, radio)
     if result["status"] == "success":
         return result
+    tried.append("Mozilla MLS")
 
-    # Try OpenCelliD community endpoint
-    result = lookup_opencellid(mcc, mnc, lac, cellid, radio)
+    # 3. OpenCelliD (nếu có token)
+    result = lookup_opencellid_community(mcc, mnc, lac, cellid, radio)
     if result["status"] == "success":
         return result
+    tried.append("OpenCelliD")
 
-    return {"status": "fail", "message": "Không tìm thấy tower với thông số này. Hãy kiểm tra lại MCC/MNC/LAC/CID."}
+    return {
+        "status": "fail",
+        "message": (
+            f"Không tìm thấy tower trong {len(tried)} nguồn ({', '.join(tried)}). "
+            "Có thể trạm này chưa có trong database cộng đồng hoặc Radio type không đúng."
+        )
+    }
 
 
 def get_operator_info(mcc: str, mnc: str) -> dict:
