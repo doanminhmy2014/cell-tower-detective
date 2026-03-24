@@ -151,32 +151,31 @@ MCC_MNC_VN = {
     ("452", "08"): {"name": "Vinaphone 4G", "flag": "🟦", "color": "#3182ce"},
 }
 
+# Các loại radio được hiển thị trong UI (đã gộp HSPA vào UMTS, bỏ CDMA)
 RADIO_TYPES = {
-    "GSM": "2G GSM",
-    "UMTS": "3G UMTS/WCDMA",
-    "LTE": "4G LTE",
-    "NR": "5G NR",
-    "CDMA": "CDMA/EVDO",
-    "HSPA": "3G HSPA+",
+    "GSM":  "2G GSM",
+    "UMTS": "3G UMTS / HSPA+",
+    "LTE":  "4G LTE",
+    "NR":   "5G NR",
 }
 
 RADIO_BADGES = {
-    "GSM": "badge-gsm", "UMTS": "badge-umts", "CDMA": "badge-umts",
-    "LTE": "badge-lte", "NR": "badge-nr", "HSPA": "badge-umts",
+    "GSM":  "badge-gsm",
+    "UMTS": "badge-umts",
+    "LTE":  "badge-lte",
+    "NR":   "badge-nr",
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
 # API Functions  (thứ tự ưu tiên: mylnikov → Mozilla → OpenCelliD community)
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Mapping radio type → tên chuẩn API
+# Mapping radio type → tên chuẩn cho từng API (UMTS và HSPA dùng chung mapping)
 RADIO_API_MAP = {
     "GSM":  {"mylnikov": "gsm",  "mozilla": "gsm",   "opencellid": "GSM"},
     "UMTS": {"mylnikov": "umts", "mozilla": "wcdma",  "opencellid": "UMTS"},
     "LTE":  {"mylnikov": "lte",  "mozilla": "lte",    "opencellid": "LTE"},
     "NR":   {"mylnikov": "nr",   "mozilla": "nr",     "opencellid": "NR"},
-    "CDMA": {"mylnikov": "cdma", "mozilla": "cdma",   "opencellid": "CDMA"},
-    "HSPA": {"mylnikov": "umts", "mozilla": "wcdma",  "opencellid": "UMTS"},
 }
 
 
@@ -420,7 +419,7 @@ with st.sidebar:
                 st.rerun()
 
     st.markdown("---")
-    st.caption("Cell Tower Detective v1.0 · Mozilla + OpenCelliD")
+    st.caption("Cell Tower Detective v1.1 · OpenCelliD (mylnikov.org) + Mozilla MLS")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Main UI
